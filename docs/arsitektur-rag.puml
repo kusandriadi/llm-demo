@@ -1,0 +1,62 @@
+@startuml arsitektur-rag
+' Arsitektur inference RAG (runtime) — lihat README bab 5
+!pragma layout smetana
+skinparam dpi 150
+skinparam shadowing false
+skinparam roundCorner 10
+skinparam defaultFontName "Segoe UI"
+skinparam ArrowColor #444
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BackgroundColor #F7F9FC
+  BorderColor #4C7BD9
+}
+title Arsitektur Inference RAG — semua lokal di PC (RTX 4060 Ti 8GB)
+
+actor "User\n(browser / CLI / app)" as user
+
+rectangle "App / API Layer\n(FastAPI · LangChain/LlamaIndex · Open WebUI)" as app
+
+package "Ingestion (sekali / saat dokumen berubah)" #EEF4FF {
+  database "Doc Store\npdf · docx · xlsx · gambar" as docstore
+  rectangle "Doc Processing\nparse · clean · chunk" as docproc
+}
+
+package "Model (via Ollama)" #FFF6E9 {
+  rectangle "Vision / OCR\nqwen2.5vl:7b" as vision
+  rectangle "Embedding\nbge-m3" as emb
+  rectangle "LLM Generation\nqwen2.5:7b\n(qwen2.5vl utk gambar)\n-- GPU 8GB --" as llm
+}
+
+database "Vector Store\nChroma / Qdrant\n+ metadata" as vs
+rectangle "Post-process\ngrounding check · sitasi\nformat JSON · disclaimer" as post
+
+rectangle "Ollama Server  (localhost:11434)\nREST: /api/generate · /api/chat · /api/embeddings\nOpenAI-compat: /v1/chat/completions\nCUDA (RTX 4060 Ti) + fallback CPU/RAM" as ollama #DDEBFF
+
+' --- INGESTION FLOW ---
+docstore --> docproc
+vision ..> docproc : teks hasil OCR\n(dokumen scan/gambar)
+docproc --> emb : chunk
+emb --> vs : vektor + metadata
+
+' --- QUERY FLOW ---
+user --> app : 1. pertanyaan / upload
+app --> vision : (jika gambar) OCR
+app --> emb : 2. embed query
+emb --> vs
+vs --> app : 3. retrieve top-k\n(opsional re-rank)
+app --> llm : 4. context + prompt
+llm --> post : 5. teks jawaban
+post --> app : 6-7. jawaban + sitasi
+app --> user : 8. hasil
+
+' model jalan di atas Ollama
+vision -[#aaa,dashed]-> ollama
+emb -[#aaa,dashed]-> ollama
+llm -[#aaa,dashed]-> ollama
+
+note bottom of ollama
+  Semua komponen di mesin ini → data tidak keluar (privasi PII terjaga).
+  Catatan: input dari pihak tak tepercaya HARUS lewat security layer — lihat arsitektur-security.
+end note
+@enduml

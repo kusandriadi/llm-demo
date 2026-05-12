@@ -4,6 +4,8 @@ Proyek belajar: menjalankan LLM **lokal** (offline, data tidak keluar dari PC) u
 
 Mesin: **Ollama** sebagai runtime model. Arsitektur: **RAG** (Retrieval-Augmented Generation) supaya jawaban berbasis dokumen sumber, bukan "ingatan" model.
 
+> 📂 **Mau langsung kerjakan?** README ini sudah dipecah jadi langkah-langkah praktis di [`implementation/`](implementation/summary.md) — `step-1.md` (install) … `step-9.md` (keamanan), plus `summary.md` sebagai peta. Diagram arsitektur ada di [`docs/`](docs/).
+
 ---
 
 ## 1. Requirement
@@ -223,6 +225,10 @@ Untuk **CV/gambar**: ekstrak teks dulu dengan `qwen2.5vl:7b` (kirim gambar base6
 ## 5. Arsitektur inference
 
 ### 5.1 Diagram — RAG inference (runtime)
+
+![Arsitektur Inference RAG](docs/arsitektur-rag.png)
+
+> Sumber diagram: [`docs/arsitektur-rag.puml`](docs/arsitektur-rag.puml) — render ulang: `java -jar tools/plantuml.jar -tpng docs/*.puml`. Versi ASCII di bawah.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -500,6 +506,10 @@ Bergantung tujuanmu — dan kamu **boleh kombinasikan** (mulai dari atas, turun 
 | Output model sendiri | Bisa memuat data sensitif karyawan lain, link exfiltrasi (`http://attacker/?d=...`), atau JSON/markdown yang merusak sistem hilir |
 
 ### 8.2 Arsitektur dengan security layer
+
+![Security Layer — cegah prompt injection](docs/arsitektur-security.png)
+
+> Sumber diagram: [`docs/arsitektur-security.puml`](docs/arsitektur-security.puml). Versi ASCII di bawah.
 
 ```
                           ┌─────────────────────────────────────────────┐
