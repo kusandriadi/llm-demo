@@ -8,6 +8,21 @@ Mesin: **Ollama** sebagai runtime model. Arsitektur: **RAG** (Retrieval-Augmente
 
 ---
 
+## Daftar isi
+
+1. [Requirement](#1-requirement) — hardware, software, functional req
+2. [Model yang dipakai & alasannya](#2-model-yang-dipakai--alasannya) — stack `qwen2.5` / `qwen2.5vl` / `bge-m3`
+3. [Step by step instalasi](#3-step-by-step-instalasi) — [3.1 Install Ollama](#31-install-ollama) · [3.2 Tarik model](#32-tarik-model) · [3.3 Tes cepat](#33-tes-cepat) · [3.4 Model kustom](#34-opsional-buat-model-kustom-dengan-system-prompt) · [3.5 Env Python](#35-setup-environment-python-untuk-rag) · [3.6 UI tanpa ngoding](#36-opsional-antarmuka-tanpa-ngoding)
+4. [Implementasi RAG — teknik & langkah](#4-implementasi-rag--teknik--langkah) — [4.1 Pipeline](#41-pipeline-ingestion--query) · [4.2 Teknik](#42-teknik-yang-dipakai-dan-kapan) · [4.3 Contoh kode](#43-contoh-kode-minimal-chroma--ollama)
+5. [Arsitektur inference](#5-arsitektur-inference) — [5.1 Diagram](#51-diagram--rag-inference-runtime) · [5.2 Yang dibutuhkan](#52-yang-dibutuhkan-untuk-inference)
+6. [Skill, MCP, dan Plugin](#6-skill-mcp-dan-plugin) — [6.1 MCP](#61-implementasi-mcp-server-akses-tool-nyata) · [6.2 Skill](#62-implementasi-skill) · [6.3 Plugin](#63-implementasi-plugin) · [6.4 Kapan pakai yang mana](#64-kapan-pakai-yang-mana)
+7. [Pilihan framework & tools untuk RAG](#7-pilihan-framework--tools-untuk-rag) — [7.1 Library/framework](#71-library--framework-kode-kamu-yang-menulis-aplikasinya) · [7.2 App siap pakai](#72-aplikasi-siap-pakai-rag-sudah-jadi--tinggal-upload-dokumen) · [7.3 Low-code](#73-low-code--visual-builder-rakit-alur-lewat-drag-drop-node) · [7.4 Rekomendasi](#74-rekomendasi-untuk-proyek-ini)
+8. [Keamanan: cegah prompt injection & security layer](#8-keamanan-cegah-prompt-injection--security-layer) — [8.1 Threat model](#81-threat-model-singkat) · [8.2 Arsitektur](#82-arsitektur-dengan-security-layer) · [8.3 Checklist kontrol](#83-kontrol-konkret-checklist) · [8.4 Tools](#84-tools-yang-bisa-dipakai) · [8.5 Yang TIDAK cukup](#85-yang-tidak-cukup-jangan-terlena)
+9. [Roadmap belajar](#9-roadmap-belajar-urutan-disarankan)
+- [Lisensi & catatan](#lisensi--catatan)
+
+---
+
 ## 1. Requirement
 
 ### Hardware (PC ini)
@@ -58,12 +73,33 @@ Stack model di PC ini (Ollama load/unload otomatis sesuai kebutuhan — tidak ja
 
 ### 3.1 Install Ollama
 
+**Windows** — pilih salah satu cara:
+
 ```powershell
+# Cara 1: winget (package manager bawaan Windows)
 winget install Ollama.Ollama
-# atau download installer: https://ollama.com/download
+
+# Cara 2: installer .exe — download lalu klik dua kali
+#   https://ollama.com/download/OllamaSetup.exe
+
+# Cara 3: one-liner PowerShell (download + install otomatis)
+irm https://ollama.com/install.ps1 | iex
 ```
 
-Setelah install, Ollama berjalan sebagai service (icon di system tray) dan listen di `http://localhost:11434`. Verifikasi:
+**Linux** — script resmi (Ubuntu/Debian/Fedora/Arch dst.):
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**macOS** — download `.dmg` lalu drag ke Applications:
+
+- https://ollama.com/download/Ollama.dmg
+
+> Daftar lengkap installer untuk semua OS: <https://ollama.com/download>
+> Dokumentasi resmi (CLI, REST API, konfigurasi, troubleshooting): <https://docs.ollama.com/>
+
+Setelah install, Ollama berjalan sebagai service (di Windows: icon di system tray) dan listen di `http://localhost:11434`. Verifikasi:
 
 ```powershell
 ollama --version

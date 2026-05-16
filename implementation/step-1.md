@@ -11,12 +11,24 @@ Ollama terpasang & jalan, model inti ke-download, terbukti bisa inference di GPU
 
 ## Langkah
 
-1. **Install Ollama**
+1. **Install Ollama** — pilih salah satu cara (Windows):
    ```powershell
+   # Cara 1: winget
    winget install Ollama.Ollama
-   # atau installer: https://ollama.com/download
+
+   # Cara 2: installer .exe — download lalu klik dua kali
+   #   https://ollama.com/download/OllamaSetup.exe
+
+   # Cara 3: one-liner PowerShell
+   irm https://ollama.com/install.ps1 | iex
    ```
-   Setelah ini Ollama jalan sebagai service (icon di system tray), listen di `http://localhost:11434`.
+   Untuk OS lain:
+   - **Linux:** `curl -fsSL https://ollama.com/install.sh | sh`
+   - **macOS:** download `Ollama.dmg` dari <https://ollama.com/download/Ollama.dmg>
+   - Daftar lengkap: <https://ollama.com/download>
+   - Dokumentasi resmi (CLI, REST API, konfigurasi, troubleshooting): <https://docs.ollama.com/>
+
+   Setelah ini Ollama jalan sebagai service (di Windows: icon di system tray), listen di `http://localhost:11434`.
 
 2. **Verifikasi**
    ```powershell
