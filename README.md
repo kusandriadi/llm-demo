@@ -1,6 +1,8 @@
-# llm-demo — Asisten Lokal untuk HR, Pajak & Recruiter (Ollama + RAG)
+# llm-demo — Asisten Lokal untuk HR, Pajak, Recruiter & Tim Lain (Ollama + RAG)
 
 Proyek belajar: menjalankan LLM **lokal** (offline, data tidak keluar dari PC) untuk membantu pekerjaan HRD, pajak, dan recruiter — membaca CV/kontrak/peraturan, ekstraksi data dari dokumen (termasuk gambar/scan), tanya-jawab atas dokumen internal, dan membuat draft (job description, surat, email).
+
+> Setup yang sama juga melayani peran lain: **marketing, designer, sales, customer support, eksekutif (CEO/COO/EA), product manager, legal**. Detail use case per peran lengkap dengan model & catatan khusus → **bab 10**.
 
 Mesin: **Ollama** sebagai runtime model. Arsitektur: **RAG** (Retrieval-Augmented Generation) supaya jawaban berbasis dokumen sumber, bukan "ingatan" model.
 
@@ -42,7 +44,32 @@ Mesin: **Ollama** sebagai runtime model. Arsitektur: **RAG** (Retrieval-Augmente
     - [8.3 Kontrol konkret (checklist)](#83-kontrol-konkret-checklist)
     - [8.4 Tools yang bisa dipakai](#84-tools-yang-bisa-dipakai)
     - [8.5 Yang TIDAK cukup (jangan terlena)](#85-yang-tidak-cukup-jangan-terlena)
+    - [8.6 Supply chain & integritas model](#86-supply-chain--integritas-model)
+    - [8.7 Vector store & embedding security](#87-vector-store--embedding-security)
+    - [8.8 System prompt & secrets management](#88-system-prompt--secrets-management)
+    - [8.9 Resource & cost guards (anti-DoS)](#89-resource--cost-guards-anti-dos)
+    - [8.10 Misinformation, halusinasi, & overreliance](#810-misinformation-halusinasi--overreliance)
+    - [8.11 Logging, audit, & UU PDP compliance](#811-logging-audit--uu-pdp-compliance)
+    - [8.12 Red team, evaluasi keamanan, & incident response](#812-red-team-evaluasi-keamanan--incident-response)
+    - [8.13 Risiko LLM lain (catatan singkat)](#813-risiko-llm-lain-catatan-singkat)
+    - [8.14 Serangan multi-turn & manipulasi konversasi](#814-serangan-multi-turn--manipulasi-konversasi)
+    - [8.15 Multi-modal & encoded injection (cipher, Morse, low-resource lang)](#815-multi-modal--encoded-injection-cipher-morse-low-resource-lang)
+    - [8.16 Training data extraction & memorization](#816-training-data-extraction--memorization)
+    - [8.17 Shadow AI, insider threat, & operasional](#817-shadow-ai-insider-threat--operasional)
 9. [Roadmap belajar (urutan disarankan)](#9-roadmap-belajar-urutan-disarankan)
+10. [Use case per peran (detail per role)](#10-use-case-per-peran-detail-per-role) — apa yang bisa dilakukan asisten, per peran
+    - [10.1 HR](#101-hr-human-resources)
+    - [10.2 Pajak / Tax / Finance](#102-pajak--tax--finance)
+    - [10.3 Recruiter](#103-recruiter)
+    - [10.4 Marketing](#104-marketing)
+    - [10.5 Designer (UI/UX/Graphic)](#105-designer-uiuxgraphic)
+    - [10.6 Sales](#106-sales)
+    - [10.7 Customer Support](#107-customer-support)
+    - [10.8 CEO](#108-ceo)
+    - [10.9 COO (Chief Operating Officer)](#109-coo-chief-operating-officer)
+    - [10.10 Executive Assistant / Chief of Staff](#1010-executive-assistant--chief-of-staff)
+    - [10.11 Product Manager](#1011-product-manager)
+    - [10.12 Legal / Compliance](#1012-legal--compliance)
 - [Lisensi & catatan](#lisensi--catatan)
 
 ---
@@ -63,7 +90,7 @@ Mesin: **Ollama** sebagai runtime model. Arsitektur: **RAG** (Retrieval-Augmente
 
 - **Ollama** ≥ 0.5 (runtime + server di `http://localhost:11434`)
 - **Python** ≥ 3.10 (untuk pipeline RAG & ekstraksi dokumen)
-- Driver NVIDIA terbaru (CUDA) — sudah ada (591.86)
+- Driver NVIDIA terbaru (CUDA) — cek di GeForce Experience / `nvidia-smi`
 - Opsional: **Docker** (untuk vector DB seperti Qdrant) atau pakai vector store embedded (Chroma)
 
 ### Functional requirement
@@ -74,6 +101,8 @@ Mesin: **Ollama** sebagai runtime model. Arsitektur: **RAG** (Retrieval-Augmente
 4. Draft teks: job description, surat peringatan, email penawaran.
 5. **Privasi**: semua proses lokal — PII (gaji, NPWP, NIK, data kandidat) tidak dikirim ke layanan cloud.
 6. Selalu sertakan **sumber** pada jawaban berbasis dokumen + disclaimer untuk hal hukum/pajak.
+
+> Daftar use case di atas hanya **inti HR/pajak/recruiter**. Detail use case per peran (Marketing, Designer, Sales, Support, CEO, COO, EA, PM, Legal) ada di **bab 10**.
 
 ---
 
@@ -118,7 +147,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 **macOS** — download `.dmg` lalu drag ke Applications:
 
-- https://ollama.com/download/Ollama.dmg
+- <https://ollama.com/download/Ollama.dmg>
 
 > Daftar lengkap installer untuk semua OS: <https://ollama.com/download>
 > Dokumentasi resmi (CLI, REST API, konfigurasi, troubleshooting): <https://docs.ollama.com/>
@@ -196,6 +225,8 @@ docker run -d -p 3000:8080 --add-host=host.docker.internal:host-gateway `
   -v open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui:main
 # buka http://localhost:3000  → set Ollama base URL: http://host.docker.internal:11434
 ```
+
+> Flag `--add-host=host.docker.internal:host-gateway` hanya wajib di **Linux** Docker. Di **Windows/Mac** Docker Desktop, `host.docker.internal` sudah tersedia otomatis (flag boleh dibiarkan, tidak merusak).
 
 Alternatif: **AnythingLLM** (desktop app) — juga punya RAG + upload dokumen + koneksi ke Ollama.
 
@@ -276,7 +307,7 @@ for d in res["source_documents"]:
     print("Sumber:", d.metadata)
 ```
 
-Untuk **CV/gambar**: ekstrak teks dulu dengan `qwen2.5vl:7b` (kirim gambar base64 ke `POST /api/generate`), simpan hasilnya sebagai dokumen teks, baru masuk pipeline yang sama.
+Untuk **CV/gambar**: ekstrak teks dulu dengan `qwen2.5vl:7b` (kirim gambar base64 ke `POST /api/generate`), simpan hasilnya sebagai dokumen teks, baru masuk pipeline yang sama. Untuk pajak/legal: tampilkan **kutipan + nama dokumen + halaman** di setiap jawaban.
 
 > Contoh di atas pakai **LangChain** — tapi itu cuma salah satu pilihan. Lihat bab **7. Pilihan framework & tools** untuk alternatif (LlamaIndex, Haystack, app siap pakai, atau tanpa framework) dan rekomendasi.
 
@@ -656,8 +687,11 @@ Bergantung tujuanmu — dan kamu **boleh kombinasikan** (mulai dari atas, turun 
 - Tool tidak punya akses shell / filesystem luas / jaringan kecuali memang perlu; jalankan di proses terbatas.
 - Timeout, rate limit, dan **audit log** setiap pemanggilan tool (siapa, kapan, argumen, hasil).
 
-**F. Isolasi & operasional**
-- **Batasi egress jaringan** dari proses model/tool — kalau model tidak bisa konek keluar, data tidak bisa di-exfiltrate meski injeksi berhasil.
+**F. Isolasi, jaringan, & operasional**
+- **Batasi egress jaringan** dari proses model/tool — kalau model tidak bisa konek keluar, data tidak bisa di-exfiltrate meski injeksi berhasil. Pakai firewall outbound allowlist; default deny-all.
+- **TLS untuk semua komunikasi antar komponen**, termasuk localhost: Ollama ↔ app, app ↔ vector store, app ↔ MCP server. Bahkan local pakai cert self-signed + verifikasi — cegah serangan lateral kalau ada proses lain di mesin.
+- **Authentication wajib**: tidak ada endpoint anonymous. Ollama default tidak punya auth — bungkus dengan reverse proxy (Caddy/Nginx) + token, atau pakai `OLLAMA_HOST=127.0.0.1` supaya tidak bisa diakses dari luar.
+- **Untuk dokumen super sensitif: air-gap** — mesin tidak terhubung ke internet sama sekali (model & dependensi di-pre-load via USB encrypted).
 - Pisahkan data per tenant/departemen di vector store; **metadata filter** + cek otorisasi user *sebelum* retrieval, bukan sesudah.
 - Rate limiting per user; monitoring anomali (lonjakan query, pola "probing").
 - **Audit log** lengkap: query, dokumen yang di-retrieve, prompt final, output, tool calls — untuk forensik & evaluasi.
@@ -685,6 +719,229 @@ Bergantung tujuanmu — dan kamu **boleh kombinasikan** (mulai dari atas, turun 
 
 ---
 
+> **Selain prompt injection, keamanan LLM lebih luas dari itu.** Subsection 8.1–8.5 fokus ke injection (LLM01 OWASP). Subsection 8.6–8.17 di bawah menutupi sisa **OWASP Top 10 for LLM Applications 2025** + risiko spesifik proyek lokal ini (multi-turn, multi-modal/cipher, memorization, shadow AI).
+>
+> | OWASP LLM 2025 | Subsection di sini |
+> |---|---|
+> | LLM01 Prompt Injection | 8.1–8.5, **8.14** (multi-turn), **8.15** (multi-modal & cipher/Morse) |
+> | LLM02 Sensitive Information Disclosure | 8.3 D, 8.7, 8.8, **8.16** (memorization), **8.17** (shadow AI/insider) |
+> | LLM03 Supply Chain | 8.6 |
+> | LLM04 Data & Model Poisoning | 8.7 (RAG poisoning), **8.16** (training data) |
+> | LLM05 Improper Output Handling | 8.3 D |
+> | LLM06 Excessive Agency | 8.3 E |
+> | LLM07 System Prompt Leakage | 8.8 |
+> | LLM08 Vector & Embedding Weaknesses | 8.7 |
+> | LLM09 Misinformation | 8.10 |
+> | LLM10 Unbounded Consumption | 8.9 |
+> | (Operasional, beyond OWASP) | **8.11** (auth/audit/UU PDP), **8.12** (red team/IR), **8.17** (shadow AI/insider) |
+
+### 8.6 Supply chain & integritas model
+
+**Risiko:** model atau dependency yang di-pull berisi backdoor; MCP server pihak ketiga di-trust padahal punya akses tool berkuasa.
+
+**Kontrol:**
+- Verifikasi **digest/SHA** saat `ollama pull`; jangan ambil dari mirror tak resmi.
+- **Pin versi**: pakai tag eksplisit seperti `qwen2.5:7b-instruct` atau yang quantized `qwen2.5:7b-instruct-q5_K_M` — **bukan** `latest`. Cek tag yang valid di `ollama.com/library/<model>/tags`. Pin `requirements.lock` Python.
+- Audit dependensi rutin: `pip-audit`, `safety`, GitHub Dependabot, `npm audit`.
+- MCP server pihak ketiga: **review source code** dulu sebelum trust — jalankan di user terbatas (bukan admin/root), bukan langsung dari NPM/PyPI tanpa audit.
+- **Transport keamanan MCP**: stdio (default) hanya aman kalau MCP server jalan lokal. Untuk MCP via HTTP/SSE → wajib **TLS + token authentication** (mutual TLS untuk produksi); jangan ekspos `0.0.0.0` tanpa auth. Validasi origin & token di setiap request.
+- **Tidak hardcode secret** di `Modelfile` / system prompt / repo — pakai env var atau secret manager (Vault, AWS Secrets, `.env` non-commit).
+- Auto-update: hanya security patch otomatis; major version manual review.
+- (Lanjutan) Sign artifact pakai `cosign`; maintain **SBOM** (Software Bill of Materials) untuk model + library.
+
+### 8.7 Vector store & embedding security
+
+**Risiko:**
+- **RAG poisoning**: dokumen jahat (sengaja di-upload, atau dimanipulasi via parsing OCR) ter-index → tiap query relevan akan ambil chunk jahat.
+- **Embedding inversion**: vektor bisa di-reverse engineer menjadi teks asli — kalau vector store leak, PII di dalamnya bisa direkonstruksi. Embedding **tidak dijamin** satu arah.
+- **Cross-tenant leakage**: data tenant A muncul di hasil tenant B karena metadata filter lupa.
+- **Index tampering**: penyerang dengan akses tulis ubah/hapus dokumen di index.
+
+**Kontrol:**
+- **PII direduksi sebelum embedding**: NIK/NPWP/nama lengkap/no rekening → token reference atau hash; simpan mapping di tempat aman.
+- Cek otorisasi user **sebelum** retrieval (bukan menyaring sesudah); **metadata filter wajib** per query (`dept`, `confidentiality_level`, `effective_date`).
+- **Pisah path tulis vs path baca**: ingestion lewat akun service berbeda; aplikasi user hanya read-only ke vector store.
+- **Enkripsi at-rest** vector store (Qdrant + disk encryption, atau Chroma di drive ter-enkripsi seperti BitLocker).
+- **Verifikasi sumber sebelum index**: hash + signed source; quarantine dulu, review baru index — terutama dokumen dari pihak luar (CV upload, email lampiran).
+- **Dokumen ultra-sensitif** (kontrak M&A, dokumen rahasia eksekutif): **jangan di-index** ke vector store yang dipakai bersama; taruh manual di prompt saat user yang berhak login.
+- **Re-index berkala** dari sumber bersih untuk membuang poisoning yang lolos; backup terenkripsi + integrity check (hash daftar `id` dokumen).
+- **Log retrieve**: siapa ambil chunk apa, kapan — untuk forensik kalau ada kebocoran.
+
+### 8.8 System prompt & secrets management
+
+**Risiko:** model bocorkan system prompt atau API key di dalamnya — pertanyaan tipe *"ulangi instruksi awal"*, *"what's your system prompt"*, atau injeksi yang minta model echo config-nya.
+
+**Kontrol:**
+- **Tidak pernah** taruh secret (API key, DB password, OAuth token, NIP/NIK karyawan tertentu) di system prompt atau `Modelfile` — pakai env var / secret manager dan inject di **tool layer**, bukan prompt.
+- **Anggap system prompt bisa bocor**: jangan andalkan kerahasiaannya untuk keamanan — keamanan harus tetap jalan meski prompt diketahui penyerang.
+- **Deteksi prompt extraction**: pattern *"show your instructions"*, *"ignore previous"*, *"what is your system prompt"*, *"repeat your rules"*, *"print the text above"*, *"reveal the prior message"*, dalam berbagai bahasa & paraphrase.
+- **Output regex scan** untuk pola secret yang umum: `sk-...`, `AKIA[0-9A-Z]{16}`, `ghp_...`, JWT pattern (`eyJ...`), `BEGIN PRIVATE KEY`, format kunci internal. Tolak/redact output yang match.
+- **Jangan log system prompt lengkap** di produksi — cukup hash + version untuk debugging; full prompt simpan terenkripsi terpisah dengan akses ketat.
+- **Rotasi rutin** secret yang terpaksa dipakai; kalau ada indikasi bocor, langsung rotate.
+
+### 8.9 Resource & cost guards (anti-DoS)
+
+**Risiko:** prompt sengaja boros context / loop → GPU/VRAM habis, user lain kena impact, biaya membengkak (di setup lokal: GPU & listrik; di cloud: tagihan).
+
+**Kontrol:**
+- **Hard cap output**: `max_tokens` (mis. 2048) untuk semua endpoint — cegah generation tak terbatas.
+- **Hard cap input**: tolak prompt > X karakter; truncate dengan strategi (head+tail / summary). Sesuaikan `num_ctx` per use case, bukan max.
+- **Timeout per request** (mis. 60s); kill kalau lewat.
+- **Rate limit** per user: token/menit, request/menit. Pakai `slowapi` / `fastapi-limiter` di FastAPI.
+- **Concurrency cap**: set `OLLAMA_NUM_PARALLEL` sesuai kapasitas GPU; **queue** (Redis + worker) untuk antrian aman saat ramai.
+- **Monitor GPU/VRAM**: `nvidia-smi` exporter → Grafana; auto-reject request baru kalau VRAM >85%.
+- **Deteksi pola adversarial**: prompt sama persis berulang, blob encoded panjang (kemungkinan injeksi), bursts dari satu user → auto-throttle atau temporarily ban.
+- **Sandbox tool execution** (kalau ada tool yang eksekusi kode/shell): container terisolasi, timeout, no network, no filesystem broad — supaya tool yang dipanggil model tidak bisa habiskan resource.
+
+### 8.10 Misinformation, halusinasi, & overreliance
+
+**Risiko:** model **jawab percaya diri padahal salah** → keputusan HR/pajak/legal terdampak; user terlalu percaya pada output ("overreliance").
+
+**Kontrol:**
+- **Selalu via RAG** untuk pertanyaan faktual (peraturan, angka, kebijakan) — bukan mengandalkan "ingatan" model 7–14B. Untuk pajak/legal: **wajib**.
+- **Grounding check**: validasi bahwa klaim di output benar-benar ada di context yang di-retrieve; kalau tidak match, tolak/minta ulang (lihat 8.3 D).
+- **Confidence signal**: minta model sertakan "YAKIN/RAGU/TIDAK TAHU" di tiap jawaban; flag yang **RAGU** untuk review manusia, **TIDAK TAHU** ditampilkan apa adanya.
+- **Refuse gracefully**: context tidak relevan → jawab "tidak ada di dokumen yang tersedia" — **bukan tebak**. System prompt eksplisit mengizinkan refuse.
+- **Disclaimer wajib** otomatis untuk domain berisiko (pajak, legal, medis, HR-keputusan-personalia): *"Verifikasi dengan profesional sebelum dipakai resmi."*
+- **Human-in-the-loop** untuk keputusan tinggi-dampak: PHK, denda pajak besar, kontrak yang ditandatangani, keputusan rekrutmen final — model **menyarankan**, manusia **memutuskan**.
+- **Tandai output AI**: watermark/metadata supaya reviewer tahu konten berasal dari AI (penting untuk dokumen yang nanti dirilis ke pihak luar).
+- **Evaluasi berkala** (lihat juga step-8.md): ~30–100 pasangan Q&A acuan, ukur `faithfulness`, `answer relevancy`, `context recall` (pakai `ragas` atau manual).
+
+### 8.11 Logging, audit, & UU PDP compliance
+
+> **Konteks hukum:** UU PDP (UU 27/2022) berlaku **penuh sejak Oktober 2024**. Asisten yang olah data karyawan/pelamar/customer = **pengendali** atau **prosesor** data pribadi. Model lokal **tidak otomatis compliant** — proseduralnya tetap wajib. Lihat juga peraturan turunan: RPP UU PDP (masih proses) dan Permenkominfo terkait.
+
+**Kontrol:**
+- **Authentication & RBAC** wajib di setiap endpoint asisten:
+  - Setiap user login (SSO/LDAP/OIDC); tidak ada anonymous access.
+  - **MFA** untuk admin (mengubah corpus, system prompt, tool config) & user berakses data sensitif (HR, payroll, EA).
+  - **Role mapping** ke dokumen & tool: `hr-staff`, `payroll-admin`, `recruiter`, `ea`, `exec`, `legal` — tiap role punya whitelist corpus & tool yang boleh diakses; cek **sebelum** retrieval.
+  - Sesi terbatas waktu (mis. 8 jam) + idle timeout (30 menit).
+- **Audit log lengkap** per request: `user_id`, `session_id`, `timestamp`, query, retrieved chunks (id + hash), prompt final (hash), output (hash atau redacted), tool calls (nama + arg + hasil), guard scores, refused/accepted.
+- **Logging integrity**: log **append-only** (WORM storage, atau S3 Object Lock, atau syslog ke server terpisah); signed checksum berkala (Merkle tree / hash chain) supaya log tidak bisa dimanipulasi setelah ditulis — penting untuk evidence trail legal.
+- **PII di log direduksi**: hash/token reference, bukan NIK/NPWP/email/no rekening mentah. Simpan mapping di tempat berakses ketat (HSM / secret manager).
+- **Retention policy** terdokumentasi (mis. 12 bulan untuk audit, 6 bulan untuk debug); hapus terjadwal otomatis.
+- **DSAR pipeline** (Data Subject Access Request — UU PDP Bab III Hak Subjek Data, Pasal 5–15): subjek data bisa minta info/akses/koreksi/hapus/portabilitas data-nya — **termasuk** yang ter-embed di vector store. Siapkan prosedur teknis untuk find-and-erase per `data_subject_id`.
+- **Dasar pemrosesan jelas** (UU PDP Pasal 20): persetujuan / pelaksanaan kontrak / kewajiban hukum / pelindungan kepentingan vital / kepentingan umum / kepentingan sah → dokumentasikan per use case di **record of processing**.
+- **DPIA / Analisis Dampak Pelindungan Data Pribadi** (UU PDP Pasal 34) sebelum deploy untuk data sensitif (CV pelamar, slip gaji, data kesehatan, data anak).
+- **Notifikasi pelanggaran** (UU PDP Pasal 46): **3×24 jam** ke subjek data + Kemkominfo kalau ada kebocoran — playbook harus siap.
+- **DPO** (Data Protection Officer — UU PDP Pasal 53): wajib kalau processing **skala besar** atau **data sensitif** (HR/recruiter umumnya kena).
+- **Kebijakan privasi** publik yang mencakup penggunaan AI untuk pemrosesan; persetujuan eksplisit di formulir lamaran/onboarding.
+- **Transfer data lintas batas** (UU PDP Pasal 56): kalau pakai model lokal, secara default **tidak terjadi** — pastikan tetap begitu (cek egress firewall, lihat 8.3 F). Kalau pakai cloud LLM untuk fallback / non-sensitif, pastikan negara tujuan **memberikan pelindungan setara** atau ada perjanjian transfer data — jangan lupa konsultasi compliance.
+- **Data sovereignty**: untuk data PII WNI, simpan & proses **di wilayah Indonesia** kalau memungkinkan — beberapa sektor (jasa keuangan via POJK 11/2022, kesehatan, dll) mewajibkan onshore.
+
+### 8.12 Red team, evaluasi keamanan, & incident response
+
+**Kontrol:**
+- **Red team berkala** (internal atau pihak ketiga): coba prompt injection, jailbreak (DAN/role-play), data exfiltration, tool abuse, PII extraction. **Wajib sebelum go-live** + setiap perubahan besar (ganti model, tambah tool, tambah corpus baru).
+- **Test suite keamanan di CI**: 50–100 prompt jahat (encoded, *"abaikan instruksi"*, social engineering, jailbreak DAN, multi-bahasa) — jalankan otomatis sebelum tiap release. Sumber dataset: `garak`, `promptfoo`, `HouYi`.
+- **Versioning** model + system prompt + guard config + corpus version; tag tiap deploy. **Rollback button** kalau insiden — kemampuan kembali ke versi stabil < 5 menit.
+- **Reproducibility audit**: `seed` tetap untuk run audit, `temperature 0.0–0.2`; simpan param di log per inferensi.
+- **Kill switch** per komponen: matikan tool spesifik, atau matikan model spesifik, atau seluruh asisten — tanpa redeploy.
+- **Playbook insiden AI**:
+  1. **Detect** — alert otomatis: output mengandung PII tak diharapkan, output drift dari baseline, tool dipanggil di luar pola normal, rate retrieve spike, content-policy violation, secret leak pattern.
+  2. **Contain** — kill switch (tool/model/asisten), rollback ke versi stabil, isolasi data yang tersentuh insiden.
+  3. **Investigate** — query audit log: rangkaian prompt + retrieved chunks + output + tool calls; rekonstruksi timeline.
+  4. **Notify** — stakeholder internal + (kalau PII bocor) subjek data + Kemkominfo (UU PDP: **3×24 jam**) + pihak terdampak.
+  5. **Remediate** — patch kontrol, tambah test case yang menangkap insiden ini, update guard rules.
+  6. **Post-mortem blameless** + share learning ke tim.
+- **Disclosure policy**: kalau asisten dipakai pihak luar — kontak untuk reporting kerentanan (`security@perusahaan.id`); pertimbangkan bug bounty.
+
+### 8.13 Risiko LLM lain (catatan singkat)
+
+- **Jailbreak vs prompt injection**: *jailbreak* = user serang policy model (DAN, role-play, "you are now Developer Mode"); *injection* = data serang via dokumen. Untuk asisten ini fokus utama **injection** (input banyak dari pihak luar) — tapi guard jailbreak juga perlu karena user internal bisa coba juga.
+- **Token smuggling / encoding tricks**: base64, ROT13, hex, leetspeak, Morse code, bahasa asing yang model bisa tapi guard tidak, zero-width chars, homoglyph → bypass keyword filter. (Insiden viral *Grok bypass safety via Morse code* masuk kategori ini — masuk keluarga **cipher jailbreak / CipherChat**, lihat 8.15.) **Mitigasi**: decode + normalisasi Unicode (NFKC) **sebelum** guard; pakai guard model **semantik** (LLM-as-judge), bukan regex saja.
+- **Adversarial suffix / GCG** (Greedy Coordinate Gradient): rangkaian token "aneh" hasil optimasi yang bikin model langgar policy. Mitigasi via guard model di **output** + output validation, bukan input filter saja (suffix bisa lolos filter input).
+- **Bias & fairness audit**: terutama untuk recruiter (peran 10.3) — uji model dengan dataset balanced (gender/usia/almamater seimbang); pasang output guard yang flag atribut sensitif (lihat 8.3 D & 10.3 catatan etis). Untuk HR umumnya juga: hindari proxy diskriminatif. **Sumber bias** tak hanya di prompt — bisa **inherited dari training data** (model dilatih atas korpus historis yang sudah bias) → bahkan dengan prompt netral, output bisa skewed; uji secara empiris dengan paired-input test (CV identik, ganti nama Andi → Andini → Wayan → cek apakah skor berubah).
+- **Model & prompt drift**: behavior berubah karena update Ollama / model / system prompt. **Test suite regression** (set ~30 prompt acuan + expected output property) jalankan tiap update.
+- **Insecure output handling lanjutan**: kalau output model di-render sebagai HTML/Markdown di UI → cegah XSS; kalau jadi SQL/shell → cegah injection di downstream; kalau jadi link → validasi domain di allowlist. (Lihat 8.3 D anti-exfiltration.)
+- **Confused deputy via konten retrieve**: konten dokumen jangan boleh memicu tool otomatis. Pemicu aksi hanya dari **user**, bukan dari context yang di-retrieve — meski isinya kelihatan "perintah".
+
+### 8.14 Serangan multi-turn & manipulasi konversasi
+
+**Konteks:** subsection 8.1–8.5 fokus per-prompt. Tapi penyerang sering bypass dengan strategi **multi-turn** — sangat berbahaya kalau context window besar (`qwen2.5:7b` punya **128K** = bisa diisi ratusan turn).
+
+**Vektor:**
+- **Many-shot jailbreaking** (Anthropic 2024): isi context dengan 100+ contoh percakapan di mana asisten "patuh" → model belajar pola in-context dan ikut di akhir. **Lebih berbahaya seiring context window tumbuh** — context 128K bisa menampung ribuan shot.
+- **Crescendo attack** (Microsoft 2024): eskalasi bertahap — mulai pertanyaan inocuous, tiap turn naikkan dikit. Model terjebak "consistency" dan akhirnya jawab yang sebelumnya akan ditolak.
+- **Goal hijacking gradual**: penyerang shift tujuan diam-diam (mis. mulai diskusi recruitment → akhirnya minta data karyawan lain yang bukan haknya).
+- **Conversation history poisoning**: kalau session history disimpan & dimasukkan ke context turn berikut, inject malicious turn → keracun ke depan. Asisten yang ingat 100 turn = surface attack besar.
+- **Role confusion**: setelah ratusan turn, model "lupa" siapa role-nya — system prompt awal "tenggelam" di context.
+
+**Kontrol:**
+- **Per-turn evaluation stateless** untuk topik sensitif: re-evaluate kebijakan tiap turn **tanpa konteks sebelumnya** kalau pertanyaan masuk kategori risiko tinggi.
+- **Cap session length & total token**; reset state untuk topik baru (start fresh conversation untuk pajak/legal/HR-keputusan-personalia).
+- **Refresh system prompt periodik**: re-inject system instruction tiap N turn supaya tidak "ditenggelamkan" konteks panjang.
+- **Per-turn output guard** (8.3 D, 8.10) tetap jalan even di tengah session panjang.
+- **Deteksi pola crescendo**: monitor "drift" topik — kalau topik bergeser jauh dari turn awal, flag.
+- **Audit log per-turn** supaya bisa rekonstruksi serangan multi-step (bukan cuma snapshot terakhir).
+- **Tidak trust history sebagai instruction set**: treat seperti context untrusted (8.3 A).
+
+### 8.15 Multi-modal & encoded injection (cipher, Morse, low-resource lang)
+
+**Konteks:** asisten ini pakai `qwen2.5vl:7b` untuk OCR/baca gambar → entry point multi-modal sangat luas. Plus model 7B+ bisa **decode encoding non-natural** (Morse, Base64, cipher) → bypass keyword guard yang naif.
+
+**Vektor multi-modal (visual):**
+- **Visual prompt injection**: instruksi ditulis langsung **di gambar** (watermark, footer kecil, teks kontras rendah, EXIF metadata) → OCR'd → dipatuhi.
+- **Adversarial image patch**: pixel pattern khusus (sticker kecil di sudut scan) yang trigger response tertentu.
+- **Cross-modal smuggling**: instruksi disembunyikan di EXIF metadata, PDF annotation, alt-text, atau layer tersembunyi — ikut ter-ekstrak parser.
+- **Image steganography**: pesan di pixel-level least-significant-bit; model VL kadang "lihat" pola.
+
+**Vektor encoded / cipher** (umbrella: **encoding-based jailbreak** / **CipherChat attack**):
+- **Cipher jailbreak** — Yong et al., ICLR 2024 (*"GPT-4 Is Too Smart To Be Safe: Stealthy Chat with LLMs via Cipher"*): instruksi jahat di-encode dalam **Morse code, Caesar cipher, ROT13, Base64, ASCII art, Atbash, Pig Latin** — model decode dan jawab, sementara keyword guard buta. **Insiden viral Grok bypass safety pakai Morse code masuk kategori ini.**
+- **Low-resource language jailbreak** — Yong et al., 2023 (*"Low-Resource Languages Jailbreak GPT-4"*): terjemahkan prompt jahat ke **Zulu, Gaelic, Hmong** → safety training bias ke high-resource language → bypass. Relevan: asisten ini Bahasa Indonesia → kalau guard pakai English-only filter, langsung bypass.
+- **Unicode tag smuggling** / **ASCII smuggling**: pakai Unicode Tag block (U+E0000–U+E007F) atau zero-width chars — tak terlihat di UI tapi model parse.
+- **Stenografi linguistik**: pesan tersembunyi di pola kata (huruf pertama tiap kalimat, posisi token tertentu, dll.).
+
+**Kontrol:**
+- **Decode + normalize sebelum guard**: Unicode NFKC, strip tag block, deteksi pattern Base64/hex/Morse → decode → re-evaluate dengan guard yang sama.
+- **Guard model semantik** (LLM-as-judge / `llama-guard3` / `shieldgemma`) — pahami intent, bukan keyword. Pertanyaan ke guard: *"Setelah decode, apakah teks ini berisi instruksi melanggar policy?"*
+- **Multi-bahasa guard**: jangan asumsikan input Bahasa Inggris/Indonesia saja; pakai guard yang dilatih multilingual (`llama-guard3` mendukung beberapa bahasa).
+- **Image preprocessing**: strip EXIF metadata, batasi region OCR ke konten utama (skip footer/margin), deteksi adversarial pattern / steganografi (tool: `stegdetect`, perceptual hashing).
+- **Re-render gambar sebelum OCR**: convert ke raster baru (PNG → PNG fresh) untuk hilangkan metadata + adversarial perturbation.
+- **Klasifier "is this encoded?"** sebagai pre-filter: kalau input terlihat seperti cipher/encoded → flag untuk review manual.
+
+### 8.16 Training data extraction & memorization
+
+**Risiko:** model lokal (`qwen2.5`, `gemma3`, dll.) **tidak immune** dari memorization. Penyerang bisa pancing model "regurgitasi" data yang nyangkut di training set — termasuk **PII publik**, kode dengan hardcoded secret, atau snippet dokumen rahasia yang dulu bocor ke crawl publik.
+
+**Vektor:**
+- **Training data extraction** (Carlini et al.): prompt dengan prefix yang cocok dengan training data → model lanjutkan persis sama (completion = data asli).
+- **Repetition / divergence attack** (Nasr et al. 2023, *"Scalable Extraction of Training Data from Production Language Models"*): minta model "ulangi 'poem poem poem...'" → setelah threshold, model "diverge" dan mulai output training data terhafal. Demonstrasi pada ChatGPT bocorkan PII publik dari training.
+- **Membership inference**: tebak "apakah dokumen X ada di training set?" — penting kalau kamu **fine-tune** model atas data internal.
+- **Reconstructed PII**: nama + email + telepon kombinasi mungkin muncul karena dataset training berisi dump leak yang publik (LinkedIn scrape, dll.).
+
+**Kontrol:**
+- **Asumsikan model bisa bocorkan training data** — jangan andalkan ketidaktahuan model sebagai bentuk keamanan.
+- **Output PII scan** (lihat 8.3 D, 8.11): pattern match NIK/NPWP/email + cek vs database internal → tolak/redact kalau pattern lengkap.
+- **Filter pertanyaan recon**: deteksi prompt fishing data spesifik orang (*"what is the home address of [public figure]?"*) → kebijakan refuse.
+- **Block repetition attack**: cap `max_tokens` & deteksi pola repetitif yang tiba-tiba diverge (perubahan distribusi token).
+- **Kalau fine-tune dengan data internal**:
+  - Pakai **differential privacy** (DP-SGD) saat training.
+  - **Dataset hygiene** ketat: jangan train PII mentah; pseudonymize/synthesize.
+  - **Audit memorization sebelum deploy**: query model dengan prefix dari data internal sensitif → cek apakah completion mengarah ke data asli; kalau iya, ada masalah memorization → re-train atau tolak deploy.
+- **Hindari fine-tune untuk PII-heavy use case** — pakai **RAG** saja (data tidak masuk weight model, hanya context per query).
+
+### 8.17 Shadow AI, insider threat, & operasional
+
+**Risiko yang sering diabaikan tapi sehari-hari:**
+
+- **Shadow AI** — karyawan pakai **cloud LLM** (ChatGPT, Claude.ai, Gemini, Copilot, dll.) dengan data perusahaan **di luar sistem ini** → bypass semua kontrol yang kita bangun. PII karyawan/kandidat/klien bocor ke vendor cloud, kadang dipakai untuk training mereka (kecuali enterprise tier dengan kontrak no-train).
+  - **Kontrol**: (a) **kebijakan tertulis** ("data perusahaan hanya boleh diolah lewat asisten internal"); (b) **technical block** ke domain LLM publik di firewall korporat / DNS filter (`chat.openai.com`, `claude.ai`, `gemini.google.com`, dll.); (c) **alternatif yang sah** — asisten internal cukup baik supaya karyawan tidak butuh shadow AI; (d) DLP (Data Loss Prevention) untuk deteksi PII yang di-paste ke browser ke domain LLM publik.
+- **Insider threat** — user **legit** dengan akses sah salah-pakai:
+  - Contoh: recruiter pinjam akses untuk lihat slip gaji karyawan lain; HR query data ex-pasangan; eksekutif minta ringkasan dokumen yang sebenarnya bukan haknya.
+  - **Kontrol**: RBAC per-dokumen ketat (8.11), **review audit log secara berkala** oleh tim Security/Compliance (bukan otomatis lewat), **anomaly detection** (akses di luar pola normal user: jam, volume, topik).
+- **Account takeover** — kredensial bocor (phishing, password reuse) → akses asisten → query banyak PII sekaligus → eksfiltrasi.
+  - **Kontrol**: **MFA wajib** (8.11), session anomaly detection (lokasi/device baru → re-auth), **kill-switch session** dari admin panel.
+- **Prompt sharing / leak via chat** — user share prompt yang sukses ke Slack/forum publik (kadang berisi PII yang nyangkut di prompt atau output).
+  - **Kontrol**: edukasi user soal data sharing; UI yang tidak mempermudah copy-paste raw prompt+output; watermark output (8.10).
+- **Automation bias / over-trust** — user terima output AI tanpa cek karena "AI bilang begitu" (8.10 sudah singgung) — diperburuk kalau output tampak meyakinkan & disclaimer di-skip.
+  - **Kontrol**: HITL keras untuk keputusan dampak tinggi; UI yang **memaksa user klik "verifikasi"** sebelum aksi; metric "% output diverifikasi vs di-pakai langsung" sebagai KPI keamanan.
+- **Operator social engineering** — admin asisten ditargetkan langsung (phishing untuk dapat akses ke config / system prompt / corpus).
+  - **Kontrol**: privileged access management (PAM), separation of duties (perubahan corpus butuh dua approval), audit setiap perubahan config.
+
+---
+
 ## 9. Roadmap belajar (urutan disarankan)
 
 1. Install Ollama → `ollama run qwen2.5:7b` (rasakan chat lokal).
@@ -698,7 +955,203 @@ Bergantung tujuanmu — dan kamu **boleh kombinasikan** (mulai dari atas, turun 
 
 ---
 
+## 10. Use case per peran (detail per role)
+
+Asisten lokal ini fleksibel — apa pun yang sering melibatkan dokumen panjang, email, gambar/scan, atau data tabel bisa dipercepat. Berikut **detail use case konkret per peran**, plus model & catatan khusus. Kamu **tidak harus** memakai semua — satu setup Ollama + RAG yang sama bisa melayani banyak peran sekaligus.
+
+> **Catatan umum semua peran:** (a) jawaban berbasis dokumen wajib lewat **RAG** (bab 4) supaya tidak ngarang; (b) untuk input sensitif atau dari pihak luar (CV pelamar, email lamaran, kontrak vendor), terapkan **security layer** (bab 8) — terutama anti-prompt-injection.
+
+### 10.1 HR (Human Resources)
+
+1. **Skrining CV massal** — batch CV (PDF teks, docx, scan) → JSON konsisten: nama, email, no HP, pendidikan, pengalaman (perusahaan + role + durasi), skills, sertifikasi. Feed ke ATS / Google Sheet.
+2. **Job description drafting** — 5-bullet brief dari hiring manager → JD lengkap (overview, tanggung jawab, requirement, benefit) dengan gaya perusahaan.
+3. **Surat keputusan / SP / penawaran kerja** — template `.docx` + variabel (nama, posisi, gaji, tanggal) → dokumen siap kirim. Pakai constrained decoding agar semua placeholder terisi.
+4. **Q&A kebijakan internal** — "berapa cuti tahunan untuk masa kerja >5 tahun?" → jawaban + sitasi pasal di PKB/handbook.
+5. **Onboarding chatbot karyawan baru** — tanya fasilitas, jadwal training, kontak departemen → jawab dari handbook + tautan halaman.
+6. **Ekstraksi slip gaji / form pajak / BPJS** — gambar/PDF scan → JSON komponen (gaji pokok, tunjangan, potongan pajak, BPJS, take home).
+7. **Klasifikasi keluhan karyawan** — kotak saran / pulse survey → label otomatis (gaji, manajer, fasilitas, beban kerja) untuk dashboard.
+8. **Performance review synthesizer** — feedback 360 dari N peer → ringkasan strengths, growth areas, kutipan pendukung.
+9. **Workforce analytics narasi** — tabel turnover/headcount per departemen → narasi insight (bukan cuma angka mentah).
+10. **Translate dokumen internal** — PKB / handbook / surat keputusan ID ↔ EN untuk expat / HQ.
+
+**Model:** `qwen2.5:7b` untuk teks, `qwen2.5vl:7b` untuk slip/scan. **Wajib:** mask PII (NIK/NPWP/gaji) di prompt log; audit setiap query yang menyentuh data personal.
+
+### 10.2 Pajak / Tax / Finance
+
+1. **Q&A peraturan pajak** — PMK/PP/UU → jawab dengan sitasi pasal/ayat. RAG **wajib** + suhu rendah (0.1–0.2).
+2. **Estimasi PPh 21** — via MCP tool (`hitung_pph21`, lihat bab 6.1): input gaji, status PTKP, tanggungan → angka + breakdown dasar perhitungan.
+3. **Ekstraksi bukti potong / faktur pajak** — PDF/scan → JSON (nomor, tanggal, NPWP, DPP, PPN, PPh).
+4. **Rekonsiliasi** — PPh dipotong vs SPT vs slip gaji → temukan selisih dengan rincian per karyawan/bulan.
+5. **Draft surat tanggapan SKP/SKPKB** — kasus + dokumen pendukung → draft argumentasi (review konsultan wajib).
+6. **Audit kelengkapan SPT** — checklist vs folder dokumen → daftar yang hilang.
+7. **Rangkum perubahan regulasi** — PMK baru vs lama → ringkasan dampak ke payroll/proses (tarif, batas, deadline).
+8. **Forecast pajak tahunan** — proyeksi dari data payroll YTD.
+
+**Disclaimer wajib di setiap output:** "Verifikasi dengan konsultan pajak resmi sebelum dipakai untuk pelaporan." Model 7–14B **tidak boleh dipercaya** untuk angka pajak tanpa RAG ke regulasi terkini.
+
+### 10.3 Recruiter
+
+1. **Matching CV ↔ JD** — skor cocokan 0–100 + breakdown (years of exp, skill overlap, gap, red flag) → JSON untuk dashboard.
+2. **Parsing batch LinkedIn export** — CSV/HTML → JSON kandidat ter-dedup, ranking by relevance.
+3. **Question bank otomatis** — JD + seniority → 10 pertanyaan interview (technical, behavioral, situational) + ekspektasi jawaban.
+4. **Notulensi interview** — transkrip (dari Whisper) → ringkasan: strengths, concerns, fit-score per kriteria, rekomendasi.
+5. **Cold outreach personalisasi** — profil kandidat → email yang menyebut detail spesifik (bukan template generik).
+6. **Reference check email** — draft + follow-up; analisis balasan referee.
+7. **Funnel & TTH analytics** — data ATS → narasi mingguan: top source, drop-off, time-to-hire per role.
+8. **Talent pool re-engagement** — kandidat lama → trigger outreach ulang berdasar role baru yang relevan.
+
+**Catatan etis:** jangan pakai proxy diskriminatif (foto, usia, status menikah, almamater) untuk skoring. Pasang output guard yang flag jika model menyebut atribut sensitif — detail di bab 8.3.
+
+### 10.4 Marketing
+
+1. **Konten sosial media (multi-platform)** — produk/kampanye → caption + hashtag batch (IG, LinkedIn, X, TikTok script 30/60-detik), 3–5 variasi A/B per post.
+2. **Copywriting** — landing page (hero, sub-headline, CTA), email subject line, ad copy Meta/Google sesuai brief & brand voice.
+3. **Brand voice consistency check** — upload brand guideline + draft → model nilai konsistensi tone, do's & don'ts; sugest revisi.
+4. **Buyer persona / ICP** — data customer (kategori, demografi, churn pattern, NPS) → persona naratif (goals, pains, channels).
+5. **Riset kompetitor** — kumpulan landing/blog/PDF marketing kompetitor → matriks positioning, messaging, pricing, USP.
+6. **Sentiment & topic analysis** — review/komentar/tiket → label sentimen + tema (price, UX, support, delivery) untuk VoC dashboard.
+7. **Rangkum laporan kampanye** — CSV/PDF report (CTR, CPM, CPC, ROAS) → narasi insight + rekomendasi optimisasi.
+8. **Brief creator/agency** — produk + objective + audience → brief lengkap (deliverable, do/don't, reference, timeline).
+9. **SEO toolkit** — keyword research dari dokumen industri, content gap analysis, title/meta description, alt text batch (juga membantu accessibility).
+10. **Email campaign sequence** — 5-step nurture / re-engagement series, personalisasi per segment (industry, lifecycle stage).
+11. **Press release** — fact sheet event/produk → struktur standar (lead, body, boilerplate, contact).
+12. **Translate marketing copy** — ID ↔ EN ↔ regional, jaga konteks budaya & SEO keyword.
+13. **Crisis comms draft** — incident → first statement (24-jam pertama), siap diedit legal/PR.
+
+**Model:** `qwen2.5:7b` untuk teks; `qwen2.5vl:7b` untuk analisis screenshot iklan/landing kompetitor.
+
+### 10.5 Designer (UI/UX/Graphic)
+
+1. **Microcopy / UI writing** — error message, empty state, tooltip, onboarding tour, confirmation — konsisten dengan voice & tone produk.
+2. **Heuristic critique mockup** — screenshot upload → evaluasi pakai Nielsen 10 (findability, error prevention, visibility, dst.) + saran prioritas.
+3. **Variasi nama** — produk/fitur/release codename — 20+ pilihan dengan rationale. Cek konflik (vs trademark / nama populer) **butuh dataset/tool eksternal** — model lokal tidak punya pengetahuan terkini.
+4. **Analisis usability test** — transkrip sesi / observer notes → tema masalah, severity, kutipan (untuk presentasi stakeholder).
+5. **User persona & journey** — interview notes → persona (goals, frustrations, behavior) + journey map (stages, emotion, opportunity).
+6. **Accessibility audit narasi** — checklist WCAG vs screenshot/HTML → temuan + rekomendasi prioritas.
+7. **Developer handoff spec** — komponen + behavior + state → spec siap dipakai dev (props, states, edge cases).
+8. **Ekstrak palette/style dari moodboard** — gambar moodboard → daftar warna dominan (HEX) + saran font pairing dari referensi.
+9. **Translate UI strings** — JSON `i18n` ID ↔ EN, jaga panjang label & konteks UI; flag jika terjemahan kepanjangan untuk komponen.
+10. **Brief desain dari stakeholder request** — request mentah → brief terstruktur (objective, audience, deliverable, constraint, success metric).
+11. **Icon naming convention** — batch icon → naming konsisten (kebab-case, semantic, hierarchical).
+12. **Riset tren desain** — kumpulan artikel/Behance/Dribbble feed → ringkasan tren + relevansi ke produk.
+
+**Model:** `qwen2.5vl:7b` untuk review screenshot/mockup/moodboard; `qwen2.5:7b` untuk dokumen teks.
+
+### 10.6 Sales
+
+1. **Account research** — website + LinkedIn export prospek → company brief: industry, size, recent news, possible pain points, decision makers.
+2. **Cold outreach personalisasi** — data prospek → multi-touch email sequence relevan ke role & company spesifik (bukan template generik).
+3. **Call notes → CRM** — transkrip discovery call → fields CRM (BANT/MEDDPICC), next step, objection, deal size estimate.
+4. **Objection handling cheat sheet** — common objection ("terlalu mahal", "sudah pakai kompetitor") → talking points (sumber: sales playbook via RAG).
+5. **Proposal / quote draft** — requirement client + price list → proposal terstruktur dengan term & condition.
+6. **Battle card** — kompetitor doc → matrix kelebihan/kekurangan vs produk kita; talking points kalau prospek banding.
+7. **Pipeline narasi mingguan** — data CRM → exec summary: deals at risk, top opportunities, action item per AE.
+8. **Forecast accuracy review** — historical commit vs actual → pola optimisme/pesimisme per sales rep (untuk coaching).
+
+### 10.7 Customer Support
+
+1. **Auto-draft first response** — tiket masuk + customer history + KB → draft balasan (agent review sebelum kirim).
+2. **Auto-tag & route** — kategori (billing, bug, feature, complaint, how-to) + priority + assigned queue.
+3. **Knowledge base Q&A internal** — agent tanya ("cara refund kalau invoice >30 hari?"), model jawab dari KB + link sumber.
+4. **Sentiment & escalation flag** — deteksi customer marah/frustrated → flag untuk supervisor + suggest de-escalation reply.
+5. **Bug repro structure** — keluhan teks → "steps to reproduce" terstruktur (Given/When/Then) untuk handoff ke engineering.
+6. **Macro / canned response generator** — pola tiket berulang → sugest macro baru ke library.
+7. **Voice of Customer report** — agregasi tiket bulanan → tema utama, frekuensi, saran improvement (kirim ke product).
+8. **Multi-bahasa support** — tiket bahasa apa saja → translate + balas dalam bahasa yang sama.
+
+### 10.8 CEO
+
+1. **Pre-meeting briefing pack (1-pager)** — sebelum board / investor / customer meeting: profil peserta, konteks (history, last interaction), dokumen relevan → 1 halaman ringkas.
+2. **Rangkum laporan kuartalan** — finance / ops / sales / marketing report → exec summary dengan trend, deviation, red flag.
+3. **Strategic memo drafting** — bullet ide → memo terstruktur (situation, options dengan tradeoff, recommendation, decision needed).
+4. **Investor update bulanan** — data internal (revenue, runway, headcount, deal pipeline) → narasi dengan tone yang biasa kamu pakai.
+5. **All-hands letter / town hall script** — pengumuman besar (acquisition, restructuring, milestone) → draft empatik & clear.
+6. **Bandingkan kontrak** — vendor / partnership / M&A → matrix klausul (term, payment, exit, IP, exclusivity, liability).
+7. **Q&A board prep** — daftar pertanyaan kritis yang mungkin diajukan board + jawaban berdasar data internal.
+8. **Compliance & legal first-pass** — surat dari regulator / counsel → ringkasan + tindakan + draft balasan (review pengacara wajib).
+9. **Competitive intel** — kumpulan laporan publik / annual report / berita kompetitor → SWOT mereka vs kita.
+10. **Decision log & post-mortem** — keputusan + rationale + outcome → review berkala untuk evaluasi decision quality.
+11. **Industry news daily digest** — RSS / clipping → 5-bullet brief tiap pagi sebelum kerja.
+12. **1:1 prep dengan C-level** — sebelum 1:1: status project orang itu, isu terbuka, last 1:1 action items, growth conversation prompt.
+
+**Model:** `qwen2.5:7b` (context 128K) untuk dokumen panjang. **Wajib RAG** — CEO butuh akurasi, halusinasi tidak dapat ditoleransi. Untuk drafting strategis: pertimbangkan `gemma3:12b` (kualitas tulisan lebih tinggi, ~8–12 tok/s di setup ini).
+
+### 10.9 COO (Chief Operating Officer)
+
+1. **Audit SOP** — kumpulan SOP → temukan inkonsistensi, gap, duplikasi antar dokumen / departemen.
+2. **Incident post-mortem (blameless)** — log + interview notes → RCA terstruktur (5-whys, timeline, contributing factors, action items).
+3. **Process bottleneck analysis** — process doc + data throughput per step → identifikasi delay tertinggi + sugest fix.
+4. **Vendor evaluation matrix** — proposal vendor (multi-PDF) → matrix harga, SLA, support coverage, exit clause, lock-in risk.
+5. **Capacity planning narasi** — utilization data (server, headcount, capacity) → kapan butuh hire / capex / scale-out.
+6. **KPI dashboard summary** — angka mentah → narasi (mengapa naik/turun, apa yang harus ditindaklanjuti) untuk weekly ops review.
+7. **Risk register update** — incident & near-miss bulan ini → update register dengan likelihood/impact + mitigation.
+8. **Budget vs actual variance analysis** — angka deviation + kemungkinan penyebab + recommendation.
+9. **Cross-departmental escalation summary** — issue lintas tim → konteks, history, opsi resolusi.
+10. **Quality check ops document** — manual / training material → konsistensi vs standar internal.
+11. **Outage / downtime communications** — log incident → customer-facing statement + internal RCA.
+12. **Runbook / playbook generator** — pattern berulang → playbook tertulis untuk operasi rutin.
+
+**Model:** `qwen2.5:7b`, suhu rendah (0.2) — operasional perlu reproducibility & traceability.
+
+### 10.10 Executive Assistant / Chief of Staff
+
+1. **Inbox triage** — batch email → klasifikasi (urgent, action needed, FYI, junk) + draft balasan singkat untuk yang siap.
+2. **Email summarization** — thread panjang (50+ reply) → bullet 5-line + action items per peserta.
+3. **Meeting brief pack (1-pager)** — sebelum eksekutif join meeting: profil peserta (LinkedIn export), konteks (last conversation), dokumen pendukung, talking points → 1 halaman.
+4. **Action item tracking** — notulensi meeting → action + owner + due date → push ke todo system / follow-up email.
+5. **Calendar conflict resolution** — konteks meeting (siapa, agenda, prioritas) → rekomendasi reschedule / proxy / decline.
+6. **Travel itinerary** — flight + hotel + meeting list → itinerary terstruktur + checklist (visa, vaccine, dokumen, currency).
+7. **Expense categorization** — receipt scan (`qwen2.5vl`) → JSON kategori untuk laporan expense.
+8. **Draft email "gaya bos"** — pelajari pola email eksekutif (dari sample) → draft balasan dengan tone yang sama.
+9. **Stakeholder map** — siapa orang ini, last interaction, preferensi komunikasi, do/don't.
+10. **Document prep** — deck panjang (50+ slide) → 1-pager talking points untuk eksekutif.
+11. **Daily exec brief (morning)** — agenda hari ini + dokumen yang perlu dibaca + keputusan yang ditunggu + birthday/anniversary kontak penting.
+12. **Birthday / milestone reminder** — daftar kontak penting + tanggal → reminder + draft note personal.
+
+**Tip privacy:** EA punya akses paling sensitif (inbox CEO, dokumen rahasia, dokumen personal). **Wajib:** RBAC ketat, audit log per akses, dan dokumen highest-sensitivity tetap di prompt → **tidak** di-index ke vector store yang dipakai bersama (bab 8.3, kontrol F-isolasi).
+
+### 10.11 Product Manager
+
+1. **PRD draft** — bullet idea/insight → PRD lengkap (problem, hypothesis, success metric, scope, out-of-scope, edge cases, dependency).
+2. **User feedback synthesis** — tiket support + review + interview notes → tema masalah + frekuensi + severity.
+3. **Feature prioritization** — daftar feature + impact/effort estimate → matrix (RICE/MoSCoW) + rekomendasi.
+4. **Competitive feature analysis** — fitur kompetitor → gap analysis vs roadmap + saran.
+5. **Release notes** — changelog teknis (git/Jira) → versi user-friendly (in-app + email).
+6. **Spec → user story** — wireframe + intent → user story + acceptance criteria + edge case test.
+7. **Launch risk register** — feature complexity → risk + mitigation + rollback plan.
+8. **Roadmap narasi 1-pager** — daftar feature + theme → narasi untuk stakeholder (bukan list kering).
+9. **Stakeholder update** — milestone hit/miss → update email per stakeholder (eng, design, marketing, leadership).
+
+### 10.12 Legal / Compliance
+
+1. **Bandingkan kontrak (redline)** — versi A vs B → highlight perubahan klausul + dampak risiko.
+2. **Klausul scan kontrak baru** — cek kelengkapan klausul wajib (governing law, IP, indemnity, term, exit, liability).
+3. **Q&A regulasi** — UU/POJK/PMK/PP → tanya-jawab dengan sitasi pasal/ayat.
+4. **NDA generator** — template + variabel (pihak, scope, durasi, governing law) → NDA draft.
+5. **Compliance gap analysis** — kebijakan internal vs regulasi terkini → temuan gap + risk level.
+6. **Document discovery / legal hold** — pencarian semantik + filter metadata untuk litigasi (semua dokumen yang mention "topik X" dalam rentang waktu Y).
+7. **Translate kontrak** — ID ↔ EN dengan terminologi hukum konsisten.
+8. **Privacy / data flow audit** — proses bisnis → assessment UU PDP (data apa, dasar hukum, retensi, kontrol).
+
+**Disclaimer wajib:** semua keluaran perlu review pengacara qualified. **Wajib:** RAG ke regulasi terbaru, suhu 0.1, grounding check ketat, log audit semua query (legal-grade evidence trail).
+
+---
+
 ## Lisensi & catatan
 
-- Model: `qwen2.5` / `qwen2.5vl` (Apache-2.0), `gemma3` (Gemma Terms of Use — ada batasan pemakaian), `bge-m3` (MIT). Cek lisensi sebelum pemakaian komersial.
-- Asisten ini alat bantu draft & analisis — **bukan pengganti** konsultan pajak/hukum/HR profesional. Selalu verifikasi keluaran sebelum dipakai resmi.
+**Lisensi repo:** README, contoh kode, dan dokumen di sini bebas dipakai untuk belajar — silakan fork & adaptasi. Jika dibawa ke produksi, periksa bagian "Lisensi model & dependensi" di bawah.
+
+**Lisensi model & dependensi:**
+- `qwen2.5` / `qwen2.5vl` — Apache-2.0 (boleh komersial).
+- `gemma3` — **Gemma Terms of Use** (ada batasan pemakaian — cek prohibited use policy Google sebelum dipakai komersial).
+- `bge-m3` — MIT (boleh komersial).
+- `llama-guard3` — Llama 3 Community License (ada syarat MAU > 700 juta).
+- Library Python (LangChain, LlamaIndex, Chroma, dll) — kebanyakan MIT/Apache; verifikasi per dependensi sebelum produksi.
+
+**Disclaimer:**
+- Asisten ini **alat bantu draft & analisis** — **bukan pengganti** konsultan pajak/hukum/HR profesional. Selalu verifikasi keluaran sebelum dipakai resmi.
+- Cuplikan UU/regulasi di README ini (UU PDP, UU Cipta Kerja, PMK, dll.) berdasar pengetahuan **per awal 2026**. Peraturan bisa berubah — selalu cek <https://peraturan.go.id> atau JDIH masing-masing kementerian untuk versi terbaru.
+- Saat memproses data pribadi WNI, patuhi **UU 27/2022 PDP** dan turunannya (lihat bab 8.11).
+- Sebelum go-live: jalankan **red team test** (lihat bab 8.12) dan **evaluasi RAG** (lihat bab 4.2 baris "Evaluasi").
+
+**Kontribusi & laporan kerentanan:** untuk yang bersifat keamanan, kontak privat (jangan public issue) — siapkan alamat seperti `security@<domain>` bila repo dipakai oleh org.
